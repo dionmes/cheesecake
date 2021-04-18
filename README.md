@@ -3,7 +3,7 @@ A learning repo for building a color GAN. Now being trained on Cheesecake images
 
 #### Based on
 
-[1] Radford, Alec, Luke Metz, and Soumith Chintala.
+Radford, Alec, Luke Metz, and Soumith Chintala.
 "Unsupervised representation learning with deep convolutional
 generative adversarial networks." arXiv preprint arXiv:1511.06434 (2015).
 
