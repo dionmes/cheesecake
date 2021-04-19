@@ -17,55 +17,47 @@ from os import listdir
 from os.path import isfile, join
 
 import numpy as np
+from numpy import ones
+from numpy.random import randint
+
 import math
-import matplotlib.pyplot as plt
 from PIL import Image
+from matplotlib import cm
 
 import tensorflow as tf
-
-from keras.models import Sequential
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Activation, Dense, Input
-from tensorflow.keras.layers import Conv2D, Flatten
+from tensorflow.keras.layers import Conv2D, Flatten, Dropout
 from tensorflow.keras.layers import Reshape, Conv2DTranspose
 from tensorflow.keras.layers import LeakyReLU
 from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import RMSprop, Adam
 from tensorflow.keras.models import Model
 from tensorflow.keras.models import load_model
-from keras.layers import Dropout
 
-from numpy import expand_dims
-from numpy import ones
-from numpy import zeros
-
-from numpy.random import rand
-from numpy.random import randint
-
-from keras.optimizers import Adam
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import Conv2D
-from keras.layers import Flatten
-from keras.layers import Dropout
-from keras.layers import LeakyReLU
 
 #
 # The discriminator
 #
 def build_discriminator(input_shape):
-	
+
+	kernelsize = (5,5)
+
 	model = Sequential(name='discriminator')
 	# normal
 	model.add(Conv2D(64, kernel_size=(3,3), padding='same', input_shape=input_shape))
 	model.add(LeakyReLU(alpha=0.2))
 	# downsample
-	model.add(Conv2D(128,kernel_size=(3,3), strides=(2,2), padding='same'))
+	model.add(Conv2D(128,kernel_size=kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 	# downsample
-	model.add(Conv2D(128, kernel_size=(3,3), strides=(2,2), padding='same'))
+	model.add(Conv2D(128, kernel_size=kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 	# downsample
-	model.add(Conv2D(128, kernel_size=(3,3), strides=(2,2), padding='same'))
+	model.add(Conv2D(256, kernel_size=kernelsize, strides=(2,2), padding='same'))
+	model.add(LeakyReLU(alpha=0.2))
+
+	model.add(Conv2D(256, kernel_size=kernelsize, padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
 	# classifier
@@ -83,6 +75,8 @@ def build_discriminator(input_shape):
 #
 def build_generator(inputs, latent_size):
 
+	kernelsize = (5,5)
+
 	model = Sequential(name='generator')
 
 	n_nodes = 256 * 24 * 24
@@ -92,19 +86,22 @@ def build_generator(inputs, latent_size):
 	
 	model.add(Reshape((24, 24, 256)))
 
-	model.add(Conv2DTranspose(128, kernel_size=(3,3), strides=(2,2), padding='same'))
+	model.add(Conv2DTranspose(128, kernel_size=kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Conv2DTranspose(128,kernel_size= (3,3), strides=(2,2), padding='same'))
+	model.add(Conv2DTranspose(128,kernel_size= kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Conv2DTranspose(128,kernel_size= (3,3), strides=(2,2), padding='same'))
+	model.add(Conv2DTranspose(128,kernel_size= kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Conv2DTranspose(128,kernel_size= (3,3), strides=(2,2), padding='same'))
+	model.add(Conv2DTranspose(256,kernel_size= kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Conv2D(3, kernel_size= (3,3), activation='tanh', padding='same'))
+	model.add(Conv2DTranspose(256,kernel_size= kernelsize, padding='same'))
+	model.add(LeakyReLU(alpha=0.2))
+
+	model.add(Conv2D(3, kernel_size= kernelsize, activation='tanh', padding='same'))
 	
 	return model
 
@@ -112,7 +109,7 @@ def build_generator(inputs, latent_size):
 #
 # Model building
 #
-def build_models(image_size, latent_size, train_steps, model_name):
+def build_models(image_size, latent_size, model_name):
 
 	# Learning rate
 	lr = 2e-4
@@ -141,12 +138,12 @@ def build_models(image_size, latent_size, train_steps, model_name):
 
 	optimizer = RMSprop(lr=lr * 0.5, decay=decay * 0.5)
 	
-	# adv = generator + discriminator
-	adv = Model(inputs, discriminator(generator(inputs)), name=model_name)
-	adv.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
-	adv.summary()
+	# gan = generator + discriminator
+	gan = Model(inputs, discriminator(generator(inputs)), name=model_name)
+	gan.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
+	gan.summary()
 
-	models = (generator, discriminator, adv)
+	models = (generator, discriminator, gan)
 	
 	return models
 
@@ -156,7 +153,7 @@ def build_models(image_size, latent_size, train_steps, model_name):
 #
 def train(models, x_train, batch_size, latent_size, train_steps, save_interval, model_name):
 
-	generator, discriminator, adv = models
+	generator, discriminator, gan = models
 
 	# noise vectors x 5, to see the development on 5 different latent spaces
 	noise_input = []
@@ -165,36 +162,51 @@ def train(models, x_train, batch_size, latent_size, train_steps, save_interval, 
 
 	train_size = x_train.shape[0]
 	
-	for i in range(train_steps):
-		rand_indexes = np.random.randint(0, train_size, size=batch_size)
-		real_images = x_train[rand_indexes]
-	
-		noise = np.random.uniform(-1.0, 1.0, size=[batch_size, latent_size])
-		
-		fake_images = generator.predict(noise)
-		
-		x = np.concatenate((real_images, fake_images))
-		
-		y = np.ones([2 * batch_size, 1])
-		
-		y[batch_size:, :] = 0.0
-		
-		loss, acc = discriminator.train_on_batch(x, y)
-		log = "%d: [discriminator loss: %f, acc: %f]" % (i, loss, acc)
+	try:
 
-		noise = np.random.uniform(-1.0, 1.0, size=[batch_size, latent_size])
+		for i in range(train_steps):
+			rand_indexes = np.random.randint(0, train_size, size=batch_size)
+			real_images = x_train[rand_indexes]
+	
+			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, latent_size])
 		
-		y = np.ones([batch_size, 1])
+			fake_images = generator.predict(noise)
 		
-		loss, acc = adv.train_on_batch(noise, y)
-		log = "%s [gan loss: %f, acc: %f]" % (log, loss, acc)
-		print(log)
+			x = np.concatenate((real_images, fake_images))
 		
-		if (i + 1) % save_interval == 0:
-			for x in range(5):
-				save_image(generator, noise_input=noise_input[x], show=False, name="lr_images_" + str(i) + "_" + str(x), model_name=model_name)
+			y = np.ones([2 * batch_size, 1])
+		
+			y[batch_size:, :] = 0.0
+		
+			loss, acc = discriminator.train_on_batch(x, y)
+			log = "%d: [discriminator loss: %f, acc: %f]" % (i, loss, acc)
+
+			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, latent_size])
+		
+			y = np.ones([batch_size, 1])
+		
+			loss, acc = gan.train_on_batch(noise, y)
+			log = "%s [gan loss: %f, acc: %f]" % (log, loss, acc)
+			print(log)
+		
+			if (i + 1) % save_interval == 0:
+				for x in range(5):
+					save_image(generator, noise_input=noise_input[x], show=False, name="image_" + str(i) + "_" + str(x), model_name=model_name)
    
-	generator.save(model_name + ".h5")
+	except KeyboardInterrupt:
+		pass
+
+	models = (generator, discriminator, gan)
+	save_models(models)
+	exit()
+	
+
+def save_models(models):
+	models = (generator, discriminator, gan)
+	
+	generator.save(model_name + "_generator.h5")
+	discriminator.save(model_name + "_discriminator.h5")
+	gan.save(model_name + "_gan.h5")
 
 
 # predict
@@ -203,7 +215,7 @@ def predict(generator,latent_size):
 	generator = load_model(model_name + ".h5")
 	noise_input = np.random.uniform(-1.0, 1.0, size=[1, latent_size])
 	
-	save_image(generator,noise_input=noise_input, show=True, model_name="test_outputs")
+	save_image(generator,noise_input=noise_input, show=True, model_name="predict_outputs")
 
 
 # save image
@@ -211,17 +223,17 @@ def save_image(generator, noise_input, show=False, name="test", model_name="gan"
 	
 	os.makedirs(model_name, exist_ok=True)
 	filename = os.path.join(model_name, name + ".png")
-	image = generator.predict(noise_input)[0]
-
+	imagedata = generator.predict(noise_input)[0]
+	image = Image.fromarray(np.uint8(cm.gist_earth(imagedata)*255))
 	image.save(filename,"png")
-
 
 if __name__ == "__main__":
 
 	predict = False
 
 	model_name = "cheesecake_gan"
-
+	image_src_dir = "./cheesecake/"
+	
 	latent_size = 100
 	# Same for x,y for now
 	image_size = 384
@@ -232,16 +244,16 @@ if __name__ == "__main__":
 	else:
 	
 		batch_size = 5
-		train_steps = 100
-		save_interval = 10
+		train_steps = 50000
+		save_interval = 2
 	
-		dircontent = listdir("./cheesecake/")
+		dircontent = listdir(image_src_dir)
 		onlyimages = [f for f in dircontent if f.endswith(".jpg") ]
 
 		x_train = np.empty([0,image_size,image_size,3])
 
 		for f in onlyimages:
-			image = Image.open("./cheesecake/" + f)
+			image = Image.open(image_src_dir + f)
 			image_array = np.asarray(image)
 			#print(image_array.shape,f)
 			x_train = np.append(x_train,[image_array],axis=0)
@@ -253,7 +265,7 @@ if __name__ == "__main__":
 	
 		print(x_train.shape)
 
-		models = build_models(image_size, latent_size, train_steps, model_name)
+		models = build_models(image_size, latent_size, model_name)
 
 		train(models, x_train, batch_size, latent_size, train_steps, save_interval, model_name)
 
