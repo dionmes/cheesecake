@@ -22,7 +22,6 @@ from numpy.random import randint
 
 import math
 from PIL import Image
-from matplotlib import cm
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -123,22 +122,18 @@ def build_models(image_size, latent_size, model_name):
 	inputs = Input(shape=input_shape, name='discriminator_input')
 	discriminator = build_discriminator(input_shape)
 	optimizer = RMSprop(lr=lr, decay=decay)
-
 	discriminator.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 	discriminator.trainable = False
-
 	discriminator.summary()
 
 	# build the generator
 	input_shape = (latent_size,)
 	inputs = Input(shape=input_shape, name='z_input')
 	generator = build_generator(inputs, latent_size)
-
 	generator.summary()
 
-	optimizer = RMSprop(lr=lr * 0.5, decay=decay * 0.5)
-	
 	# gan = generator + discriminator
+	optimizer = RMSprop(lr=lr * 0.5, decay=decay * 0.5)
 	gan = Model(inputs, discriminator(generator(inputs)), name=model_name)
 	gan.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
 	gan.summary()
@@ -174,15 +169,14 @@ def train(models, x_train, batch_size, latent_size, train_steps, save_interval, 
 		
 			x = np.concatenate((real_images, fake_images))
 		
+			# Real is 1, Fake is 0
 			y = np.ones([2 * batch_size, 1])
-		
 			y[batch_size:, :] = 0.0
 		
 			loss, acc = discriminator.train_on_batch(x, y)
 			log = "%d: [discriminator loss: %f, acc: %f]" % (i, loss, acc)
 
 			noise = np.random.uniform(-1.0, 1.0, size=[batch_size, latent_size])
-		
 			y = np.ones([batch_size, 1])
 		
 			loss, acc = gan.train_on_batch(noise, y)
@@ -196,13 +190,11 @@ def train(models, x_train, batch_size, latent_size, train_steps, save_interval, 
 	except KeyboardInterrupt:
 		pass
 
-	models = (generator, discriminator, gan)
-	save_models(models)
+	save_models(generator, discriminator, gan)
 	exit()
 	
 
-def save_models(models):
-	models = (generator, discriminator, gan)
+def save_models(generator, discriminator, gan):
 	
 	generator.save(model_name + "_generator.h5")
 	discriminator.save(model_name + "_discriminator.h5")
@@ -224,7 +216,7 @@ def save_image(generator, noise_input, show=False, name="test", model_name="gan"
 	os.makedirs(model_name, exist_ok=True)
 	filename = os.path.join(model_name, name + ".png")
 	imagedata = generator.predict(noise_input)[0]
-	image = Image.fromarray(np.uint8(cm.gist_earth(imagedata)*255))
+	image = Image.fromarray(np.uint8(imagedata)*255)
 	image.save(filename,"png")
 
 if __name__ == "__main__":
@@ -242,10 +234,12 @@ if __name__ == "__main__":
 		predict(latent_size)
 		
 	else:
-	
-		batch_size = 5
-		train_steps = 50000
-		save_interval = 2
+		#Increase batch size if more available memory or smaller image size
+		batch_size = 24
+		
+		# CTRL-C will also save the models.
+		train_steps = 35000
+		save_interval = 500
 	
 		dircontent = listdir(image_src_dir)
 		onlyimages = [f for f in dircontent if f.endswith(".jpg") ]
