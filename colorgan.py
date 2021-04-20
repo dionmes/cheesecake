@@ -221,7 +221,7 @@ def save_image(generator, noise_input, show=False, name="test", model_name="gan"
 
 if __name__ == "__main__":
 
-	test = True
+	test = False
 
 	model_name = "cheesecake_gan"
 	image_src_dir = "./cheesecake/"
