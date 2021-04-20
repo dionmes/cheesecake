@@ -199,12 +199,12 @@ def save_models(generator, discriminator, gan):
 	generator.save(model_name + "_generator.h5")
 	discriminator.save(model_name + "_discriminator.h5")
 	gan.save(model_name + "_gan.h5")
-
+	
 
 # predict
-def predict(generator,latent_size):
+def predict(latent_size):
 
-	generator = load_model(model_name + ".h5")
+	generator = load_model(model_name + "_generator.h5")
 	noise_input = np.random.uniform(-1.0, 1.0, size=[1, latent_size])
 	
 	save_image(generator,noise_input=noise_input, show=True, model_name="predict_outputs")
@@ -216,12 +216,12 @@ def save_image(generator, noise_input, show=False, name="test", model_name="gan"
 	os.makedirs(model_name, exist_ok=True)
 	filename = os.path.join(model_name, name + ".png")
 	imagedata = generator.predict(noise_input)[0]
-	image = Image.fromarray(np.uint8(imagedata)*255)
+	image = Image.fromarray(np.uint8(imagedata*255))
 	image.save(filename,"png")
 
 if __name__ == "__main__":
 
-	predict = False
+	test = True
 
 	model_name = "cheesecake_gan"
 	image_src_dir = "./cheesecake/"
@@ -230,7 +230,7 @@ if __name__ == "__main__":
 	# Same for x,y for now
 	image_size = 384
 
-	if predict:
+	if test:
 		predict(latent_size)
 		
 	else:
