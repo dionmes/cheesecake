@@ -40,11 +40,11 @@ from tensorflow.keras.models import load_model
 #
 def build_discriminator(input_shape):
 
-	kernelsize = (5,5)
+	kernelsize = (3,3)
 
 	model = Sequential(name='discriminator')
 	# normal
-	model.add(Conv2D(64, kernel_size=(3,3), padding='same', input_shape=input_shape))
+	model.add(Conv2D(64, kernel_size=kernelsize, padding='same', input_shape=input_shape))
 	model.add(LeakyReLU(alpha=0.2))
 	# downsample
 	model.add(Conv2D(128,kernel_size=kernelsize, strides=(2,2), padding='same'))
@@ -52,11 +52,8 @@ def build_discriminator(input_shape):
 	# downsample
 	model.add(Conv2D(128, kernel_size=kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
-	# downsample
-	model.add(Conv2D(256, kernel_size=kernelsize, strides=(2,2), padding='same'))
-	model.add(LeakyReLU(alpha=0.2))
 
-	model.add(Conv2D(256, kernel_size=kernelsize, padding='same'))
+	model.add(Conv2D(256, kernel_size=kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
 	# classifier
@@ -74,21 +71,18 @@ def build_discriminator(input_shape):
 #
 def build_generator(inputs, latent_size):
 
-	kernelsize = (5,5)
+	kernelsize = (3,3)
 
 	model = Sequential(name='generator')
 
-	n_nodes = 256 * 24 * 24
+	n_nodes = 1024 * 48 * 48
 	
 	model.add(Dense(n_nodes, input_dim=latent_size))
 	model.add(LeakyReLU(alpha=0.2))
 	
-	model.add(Reshape((24, 24, 256)))
+	model.add(Reshape((48, 48, 1024)))
 
 	model.add(Conv2DTranspose(128, kernel_size=kernelsize, strides=(2,2), padding='same'))
-	model.add(LeakyReLU(alpha=0.2))
-
-	model.add(Conv2DTranspose(128,kernel_size= kernelsize, strides=(2,2), padding='same'))
 	model.add(LeakyReLU(alpha=0.2))
 
 	model.add(Conv2DTranspose(128,kernel_size= kernelsize, strides=(2,2), padding='same'))
@@ -209,7 +203,6 @@ def predict(latent_size):
 	
 	save_image(generator,noise_input=noise_input, show=True, model_name="predict_outputs")
 
-
 # save image
 def save_image(generator, noise_input, show=False, name="test", model_name="gan"):
 	
@@ -235,10 +228,10 @@ if __name__ == "__main__":
 		
 	else:
 		#Increase batch size if more available memory or smaller image size
-		batch_size = 24
+		batch_size = 16
 		
 		# CTRL-C will also save the models.
-		train_steps = 35000
+		train_steps = 55000
 		save_interval = 500
 	
 		dircontent = listdir(image_src_dir)
